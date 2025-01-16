@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-func main(){
+func image_() {
 	// Open the image file
 	file, err := os.Open("image1.png") // Replace with your image file path
 	if err != nil {

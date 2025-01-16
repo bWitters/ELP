@@ -2,22 +2,42 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"image"
-	"image/jpeg"
+	"image/color"
 	"image/png"
+	"math"
 	"os"
 )
 
 const size int = 5
 const image_size int = 10
 
-func gaussian_matrix(sigma float64, gaussian_m [size][size]float64) ([size][size]float64) {
-	for i:=-size/2; i<=size/2; i++{
-		for j:=-size/2; j<=size/2; j++{
-			var pos_a float64 = float64(i) 
+func image_opener() image.Image {
+	// Open the image file
+	file, err := os.Open("Valve_original_(1).PNG") // Replace with your image file path
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return nil
+	}
+	fmt.Println(file)
+	defer file.Close()
+
+	// Decode the image
+	img, err := png.Decode(file)
+	if err != nil {
+		fmt.Println("Error decoding image:", err)
+		return nil
+	}
+	fmt.Println("Image format:", "png")
+	return img
+}
+
+func gaussian_matrix(sigma float64, gaussian_m [size][size]float64) [size][size]float64 {
+	for i := -size / 2; i <= size/2; i++ {
+		for j := -size / 2; j <= size/2; j++ {
+			var pos_a float64 = float64(i)
 			var pos_b float64 = float64(j)
-			gaussian_m[i+size/2][j+size/2] = math.Exp(-(pos_a*pos_a+pos_b*pos_b)/(2*sigma))/(2*math.Pi*(sigma*sigma))
+			gaussian_m[i+size/2][j+size/2] = math.Exp(-(pos_a*pos_a+pos_b*pos_b)/(2*sigma)) / (2 * math.Pi * (sigma * sigma))
 		}
 	}
 	return gaussian_m
@@ -29,7 +49,7 @@ func gaussian_matrix(sigma float64, gaussian_m [size][size]float64) ([size][size
 	oply = size
 	ny = image_size
 	nx = image_size
-	
+
 	hoplx = (oplx + 1)/2
 	hoply = (oply+1)/2
 
@@ -55,47 +75,79 @@ func gaussian_matrix(sigma float64, gaussian_m [size][size]float64) ([size][size
 	}
 } */
 
-func gaussian_filter(op [size][size]float64, data [image_size][image_size] float64) ([10][10]float64) {
-	var image_with_gauss [image_size][image_size]float64
-	for i := 0; i<image_size; i++ {
-		for j := 0; j< image_size; j++{
+func gaussian_filter(op [size][size]float64, data image.Image) image.Image {
+	var bounds = data.Bounds()
+	var image_with_gauss = image.NewRGBA(bounds)
+	for i := 0; i < image_size; i++ {
+		for j := 0; j < image_size; j++ {
 			var sum float64 = 0
-			for k := 0; k<size; k++{
-				for l := 0; l<size; l++{
-					switch{
+			for k := 0; k < size; k++ {
+				for l := 0; l < size; l++ {
+					switch {
 					case i-size/2+k < 0, j-size/2+l < 0, i-size/2+k-1 > image_size, j-size/2+l-1 > image_size:
 						continue
-					default :
-						sum += op[i-size/2+k][j-size/2+l]*data[i-size/2+k][j-size/2+l]
+					default:
+						g, _, _, _ := data.At(i+k, j+l).RGBA()
+						fmt.Println(g)
+						sum += op[k][l] * float64(g)
+						fmt.Println(sum)
 					}
 				}
 			}
-			image_with_gauss[i][j] = sum
+			fmt.Println(uint8(sum))
+			image_with_gauss.Set(i, j, color.Gray{uint8(sum)})
+			fmt.Println(image_with_gauss)
 		}
 	}
 	return image_with_gauss
+}
+
+func grey_scale(pic image.Image) image.Image {
+	bounds := pic.Bounds()
+	newImg := image.NewRGBA(bounds)
+
+	// Process each pixel from the source image and write to the new image
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			newImg.Set(x, y, color.Gray16Model.Convert(pic.At(x, y)))
+		}
+	}
+	return newImg
 }
 
 func main() {
 	var gaussian_mat [size][size]float64
 	fmt.Println("coucou")
 	fmt.Println(gaussian_mat)
-	fmt.Println(size/2)
-	gaussian_mat = gaussian_matrix(1,gaussian_mat)
-	fmt.Println(gaussian_mat)
+	fmt.Println(size / 2)
+	gaussian_mat = gaussian_matrix(1, gaussian_mat)
 
-	var image = [10][10]float64{{0.34, 0.85, 0.91, 0.44, 0.56, 0.32, 0.72, 0.61, 0.45, 0.88},
-    {0.12, 0.67, 0.79, 0.24, 0.92, 0.85, 0.31, 0.77, 0.40, 0.62},
-    {0.54, 0.33, 0.11, 0.29, 0.89, 0.45, 0.66, 0.38, 0.49, 0.93},
-    {0.25, 0.78, 0.37, 0.14, 0.82, 0.60, 0.47, 0.53, 0.94, 0.50},
-    {0.68, 0.99, 0.36, 0.23, 0.12, 0.55, 0.74, 0.18, 0.67, 0.81},
-    {0.87, 0.46, 0.63, 0.21, 0.35, 0.95, 0.29, 0.40, 0.88, 0.76},
-    {0.41, 0.83, 0.90, 0.39, 0.61, 0.44, 0.73, 0.27, 0.52, 0.19},
-    {0.30, 0.98, 0.58, 0.20, 0.85, 0.71, 0.64, 0.49, 0.53, 0.97},
-    {0.11, 0.69, 0.75, 0.56, 0.34, 0.93, 0.62, 0.48, 0.72, 0.57},
-    {0.77, 0.43, 0.80, 0.15, 0.28, 0.66, 0.38, 0.84, 0.70, 0.31}}
+	var pic = image_opener()
 
-	res_1 := gaussian_filter(gaussian_mat, image)
+	var image_gray_scale image.Image = grey_scale(pic)
 
-	fmt.Println(res_1)
+	fmt.Println(image_gray_scale)
+
+	fmt.Println(image_gray_scale.At(10, 10).RGBA())
+
+	image_gauss := gaussian_filter(gaussian_mat, image_gray_scale)
+
+	//fmt.Println(image_gauss)
+
+	outFile, err := os.Create("output.png")
+	if err != nil {
+		fmt.Println("Error creating file:", err)
+		return
+	}
+	defer outFile.Close()
+
+	err = png.Encode(outFile, image_gauss) // Use jpeg.Encode for JPEG images
+	if err != nil {
+		fmt.Println("Error encoding image:", err)
+		return
+	}
+	fmt.Println("Image saved as output.png")
+	// res_1 := gaussian_filter(gaussian_mat, image)
+
+	// fmt.Println(res_1)
 }

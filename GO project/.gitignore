@@ -39,6 +39,7 @@ Thumbs.db
 # IMAGE #
 #########
 
+*.PNG
 *.png
 *.jpeg
 *.jpg
