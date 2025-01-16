@@ -7,9 +7,11 @@ import (
 	"image/png"
 	"math"
 	"os"
+
+	"github.com/anthonynsimon/bild/convolution"
 )
 
-const size int = 5
+const size int = 15
 const image_size int = 10
 
 func image_opener() image.Image {
@@ -32,12 +34,14 @@ func image_opener() image.Image {
 	return img
 }
 
-func gaussian_matrix(sigma float64, gaussian_m [size][size]float64) [size][size]float64 {
+func gaussian_matrix(sigma float64, gaussian_m []float64) []float64 {
+	k := 0
 	for i := -size / 2; i <= size/2; i++ {
 		for j := -size / 2; j <= size/2; j++ {
 			var pos_a float64 = float64(i)
 			var pos_b float64 = float64(j)
-			gaussian_m[i+size/2][j+size/2] = math.Exp(-(pos_a*pos_a+pos_b*pos_b)/(2*sigma)) / (2 * math.Pi * (sigma * sigma))
+			gaussian_m = append(gaussian_m, math.Exp(-(pos_a*pos_a+pos_b*pos_b)/(2*sigma))/(2*math.Pi*(sigma*sigma)))
+			k += 1
 		}
 	}
 	return gaussian_m
@@ -75,31 +79,39 @@ func gaussian_matrix(sigma float64, gaussian_m [size][size]float64) [size][size]
 	}
 } */
 
-func gaussian_filter(op [size][size]float64, data image.Image) image.Image {
-	var bounds = data.Bounds()
-	var image_with_gauss = image.NewRGBA(bounds)
-	for i := 0; i < image_size; i++ {
-		for j := 0; j < image_size; j++ {
-			var sum float64 = 0
-			for k := 0; k < size; k++ {
-				for l := 0; l < size; l++ {
-					switch {
-					case i-size/2+k < 0, j-size/2+l < 0, i-size/2+k-1 > image_size, j-size/2+l-1 > image_size:
-						continue
-					default:
-						g, _, _, _ := data.At(i+k, j+l).RGBA()
-						fmt.Println(g)
-						sum += op[k][l] * float64(g)
-						fmt.Println(sum)
-					}
-				}
-			}
-			fmt.Println(uint8(sum))
-			image_with_gauss.Set(i, j, color.Gray{uint8(sum)})
-			fmt.Println(image_with_gauss)
-		}
-	}
-	return image_with_gauss
+// func gaussian_filter(op [size][size]float64, data image.Image) image.Image {
+// 	var bounds = data.Bounds()
+// 	var image_with_gauss = image.NewRGBA(bounds)
+// 	for i := 0; i < image_size; i++ {
+// 		for j := 0; j < image_size; j++ {
+// 			var sum float64 = 0
+// 			for k := 0; k < size; k++ {
+// 				for l := 0; l < size; l++ {
+// 					switch {
+// 					case i-size/2+k < 0, j-size/2+l < 0, i-size/2+k-1 > image_size, j-size/2+l-1 > image_size:
+// 						continue
+// 					default:
+// 						g, _, _, _ := data.At(i+k, j+l).RGBA()
+// 						fmt.Println(g)
+// 						sum += op[k][l] * float64(g)
+// 						fmt.Println(sum)
+// 					}
+// 				}
+// 			}
+// 			fmt.Println(uint8(sum))
+// 			image_with_gauss.Set(i, j, color.Gray{uint8(sum)})
+// 			fmt.Println(image_with_gauss)
+// 		}
+// 	}
+// 	return image_with_gauss
+// }
+
+func gaussian_filter(op []float64, data image.Image) image.Image { // With convolve func
+	kernel := convolution.Kernel{op, size, size}
+	k := kernel.Normalized()
+	o := &convolution.Options{Bias: 0, Wrap: false}
+	test := convolution.Convolve(data, k, o)
+	return test
 }
 
 func grey_scale(pic image.Image) image.Image {
@@ -116,19 +128,15 @@ func grey_scale(pic image.Image) image.Image {
 }
 
 func main() {
-	var gaussian_mat [size][size]float64
+	var gaussian_mat []float64
 	fmt.Println("coucou")
 	fmt.Println(gaussian_mat)
 	fmt.Println(size / 2)
-	gaussian_mat = gaussian_matrix(1, gaussian_mat)
+	gaussian_mat = gaussian_matrix(4, gaussian_mat)
 
 	var pic = image_opener()
 
 	var image_gray_scale image.Image = grey_scale(pic)
-
-	fmt.Println(image_gray_scale)
-
-	fmt.Println(image_gray_scale.At(10, 10).RGBA())
 
 	image_gauss := gaussian_filter(gaussian_mat, image_gray_scale)
 
@@ -147,7 +155,4 @@ func main() {
 		return
 	}
 	fmt.Println("Image saved as output.png")
-	// res_1 := gaussian_filter(gaussian_mat, image)
-
-	// fmt.Println(res_1)
 }
