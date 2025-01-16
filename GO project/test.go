@@ -11,17 +11,15 @@ import (
 	"github.com/anthonynsimon/bild/convolution"
 )
 
-const size int = 15
-const image_size int = 10
+const size int = 5
 
 func image_opener() image.Image {
 	// Open the image file
-	file, err := os.Open("Valve_original_(1).PNG") // Replace with your image file path
+	file, err := os.Open("Large_Scaled_Forest_Lizard.png") // Replace with your image file path
 	if err != nil {
 		fmt.Println("Error opening file:", err)
 		return nil
 	}
-	fmt.Println(file)
 	defer file.Close()
 
 	// Decode the image
@@ -47,71 +45,51 @@ func gaussian_matrix(sigma float64, gaussian_m []float64) []float64 {
 	return gaussian_m
 }
 
-/* func gaussian_filter(op [size][size]float64, data [image_size][image_size] float64) {
-	// https://janth.home.xs4all.nl/Publications/html/conv2d.html for 2D convolution algorithm
-	oplx = size
-	oply = size
-	ny = image_size
-	nx = image_size
-
-	hoplx = (oplx + 1)/2
-	hoply = (oply+1)/2
-
-	for iy = 0; iy <ny ; iy ++ {
-		starty = math.Max(iy-hoply+1, 0)
-		endy   = math.Min(iy+hoply, ny)
-
-		dumr = dumi = 0.0
-		k = math.Max(hoply-1-iy, 0)
-		for i = starty; i < endy; i++ {
-			l = math.Max(hoplx-1-ix, 0)
-			for j = startx; j < endx; j++ {
-				dumr += data[i*nx+j].r*opx[k*oplx+l].r
-				dumr += data[i*nx+j].i*opx[k*oplx+l].i
-				dumi += data[i*nx+j].i*opx[k*oplx+l].r
-				dumi -= data[i*nx+j].r*opx[k*oplx+l].i
-				l++
-			}
-			k++
-		}
-		convr[iy*nx+ix].r = dumr
-		convr[iy*nx+ix].i = dumi
-	}
-} */
-
-// func gaussian_filter(op [size][size]float64, data image.Image) image.Image {
-// 	var bounds = data.Bounds()
-// 	var image_with_gauss = image.NewRGBA(bounds)
-// 	for i := 0; i < image_size; i++ {
-// 		for j := 0; j < image_size; j++ {
-// 			var sum float64 = 0
-// 			for k := 0; k < size; k++ {
-// 				for l := 0; l < size; l++ {
-// 					switch {
-// 					case i-size/2+k < 0, j-size/2+l < 0, i-size/2+k-1 > image_size, j-size/2+l-1 > image_size:
-// 						continue
-// 					default:
-// 						g, _, _, _ := data.At(i+k, j+l).RGBA()
-// 						fmt.Println(g)
-// 						sum += op[k][l] * float64(g)
-// 						fmt.Println(sum)
-// 					}
-// 				}
-// 			}
-// 			fmt.Println(uint8(sum))
-// 			image_with_gauss.Set(i, j, color.Gray{uint8(sum)})
-// 			fmt.Println(image_with_gauss)
-// 		}
-// 	}
-// 	return image_with_gauss
-// }
-
 func gaussian_filter(op []float64, data image.Image) image.Image { // With convolve func
 	kernel := convolution.Kernel{op, size, size}
 	k := kernel.Normalized()
 	o := &convolution.Options{Bias: 0, Wrap: false}
 	test := convolution.Convolve(data, k, o)
 	return test
+}
+
+func gradient(data image.Image) image.Image {
+	vect := []float64{1, 0, -1}
+	vertical := convolution.Kernel{vect, 1, 3}
+	horizontal := convolution.Kernel{vect, 3, 1}
+	vert_norm := vertical.Normalized()
+	hor_norm := horizontal.Normalized()
+	o := &convolution.Options{Bias: 0, Wrap: false}
+	gradient_vert := convolution.Convolve(data, vert_norm, o)
+	gradient_hor := convolution.Convolve(data, hor_norm, o)
+	var grad_dir [][]float64
+	var grad_mag [][]float64
+	var grad_dir_temp []float64
+	var grad_mag_temp []float64
+	for i := data.Bounds().Min.X; i < data.Bounds().Max.X; i += 1 {
+		grad_dir_temp = []float64{}
+		grad_mag_temp = []float64{}
+		for j := data.Bounds().Min.Y; j < data.Bounds().Max.Y; j += 1 {
+			r_v, _, _, _ := gradient_vert.RGBA64At(i, j).RGBA()
+			r_h, _, _, _ := gradient_hor.RGBA64At(i, j).RGBA()
+			grad_dir_temp = append(grad_dir_temp, math.Atan(float64(r_v)/float64(r_h)))
+			grad_mag_temp = append(grad_mag_temp, math.Sqrt(math.Pow(float64(r_v), 2)+math.Pow(float64(r_h), 2)))
+		}
+		grad_dir = append(grad_dir, grad_dir_temp)
+		grad_mag = append(grad_mag, grad_mag_temp)
+	}
+	bounds := data.Bounds()
+	newImg := image.NewRGBA(bounds)
+
+	// Process each pixel from the source image and write to the new image
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			a := grad_mag[x][y]
+			_, _, _, alpha := data.At(x, y).RGBA()
+			newImg.Set(x, y, color.RGBA{uint8(a), uint8(a), uint8(a), uint8(alpha)})
+		}
+	}
+	return newImg
 }
 
 func grey_scale(pic image.Image) image.Image {
@@ -129,10 +107,7 @@ func grey_scale(pic image.Image) image.Image {
 
 func main() {
 	var gaussian_mat []float64
-	fmt.Println("coucou")
-	fmt.Println(gaussian_mat)
-	fmt.Println(size / 2)
-	gaussian_mat = gaussian_matrix(4, gaussian_mat)
+	gaussian_mat = gaussian_matrix(1.4, gaussian_mat)
 
 	var pic = image_opener()
 
@@ -140,9 +115,7 @@ func main() {
 
 	image_gauss := gaussian_filter(gaussian_mat, image_gray_scale)
 
-	//fmt.Println(image_gauss)
-
-	outFile, err := os.Create("output.png")
+	outFile, err := os.Create("gaussian_filter.png")
 	if err != nil {
 		fmt.Println("Error creating file:", err)
 		return
@@ -154,5 +127,21 @@ func main() {
 		fmt.Println("Error encoding image:", err)
 		return
 	}
-	fmt.Println("Image saved as output.png")
+	fmt.Println("Image saved as gaussian_filter.png")
+
+	grad_image := gradient(image_gauss)
+
+	outFile_grad, err := os.Create("gradient_filter.png")
+	if err != nil {
+		fmt.Println("Error creating file:", err)
+		return
+	}
+	defer outFile_grad.Close()
+
+	err = png.Encode(outFile_grad, grad_image) // Use jpeg.Encode for JPEG images
+	if err != nil {
+		fmt.Println("Error encoding image:", err)
+		return
+	}
+	fmt.Println("Image saved as gradient_filter.png")
 }
