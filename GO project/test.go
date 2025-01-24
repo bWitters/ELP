@@ -53,43 +53,82 @@ func gaussian_filter(op []float64, data image.Image) image.Image { // With convo
 	return test
 }
 
-func gradient(data image.Image) image.Image {
-	vect := []float64{1, 0, -1}
-	vertical := convolution.Kernel{vect, 1, 3}
-	horizontal := convolution.Kernel{vect, 3, 1}
-	vert_norm := vertical.Normalized()
-	hor_norm := horizontal.Normalized()
-	o := &convolution.Options{Bias: 0, Wrap: false}
-	gradient_vert := convolution.Convolve(data, vert_norm, o)
-	gradient_hor := convolution.Convolve(data, hor_norm, o)
-	var grad_dir [][]float64
-	var grad_mag [][]float64
-	var grad_dir_temp []float64
-	var grad_mag_temp []float64
-	for i := data.Bounds().Min.X; i < data.Bounds().Max.X; i += 1 {
-		grad_dir_temp = []float64{}
-		grad_mag_temp = []float64{}
-		for j := data.Bounds().Min.Y; j < data.Bounds().Max.Y; j += 1 {
-			r_v, _, _, _ := gradient_vert.RGBA64At(i, j).RGBA()
-			r_h, _, _, _ := gradient_hor.RGBA64At(i, j).RGBA()
-			grad_dir_temp = append(grad_dir_temp, math.Atan(float64(r_v)/float64(r_h)))
-			grad_mag_temp = append(grad_mag_temp, math.Sqrt(math.Pow(float64(r_v), 2)+math.Pow(float64(r_h), 2)))
-		}
-		grad_dir = append(grad_dir, grad_dir_temp)
-		grad_mag = append(grad_mag, grad_mag_temp)
-	}
-	bounds := data.Bounds()
-	newImg := image.NewRGBA(bounds)
+// func gradient(data image.Image) image.Image {
+// 	vect := []float64{1, 0, -1}
+// 	vertical := convolution.Kernel{vect, 1, 3}
+// 	horizontal := convolution.Kernel{vect, 3, 1}
+// 	vert_norm := vertical.Normalized()
+// 	hor_norm := horizontal.Normalized()
+// 	o := &convolution.Options{Bias: 0, Wrap: false}
+// 	gradient_vert := convolution.Convolve(data, vert_norm, o)
+// 	gradient_hor := convolution.Convolve(data, hor_norm, o)
+// 	var grad_dir [][]float64
+// 	var grad_mag [][]float64
+// 	var grad_dir_temp []float64
+// 	var grad_mag_temp []float64
+// 	for i := data.Bounds().Min.X; i < data.Bounds().Max.X; i += 1 {
+// 		grad_dir_temp = []float64{}
+// 		grad_mag_temp = []float64{}
+// 		for j := data.Bounds().Min.Y; j < data.Bounds().Max.Y; j += 1 {
+// 			r_v, _, _, _ := gradient_vert.RGBA64At(i, j).RGBA()
+// 			r_h, _, _, _ := gradient_hor.RGBA64At(i, j).RGBA()
+// 			grad_dir_temp = append(grad_dir_temp, math.Atan(float64(r_v)/float64(r_h)))
+// 			grad_mag_temp = append(grad_mag_temp, math.Sqrt(math.Pow(float64(r_v), 2)+math.Pow(float64(r_h), 2)))
+// 		}
+// 		grad_dir = append(grad_dir, grad_dir_temp)
+// 		grad_mag = append(grad_mag, grad_mag_temp)
+// 	}
+// 	bounds := data.Bounds()
+// 	newImg := image.NewRGBA(bounds)
 
-	// Process each pixel from the source image and write to the new image
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			a := grad_mag[x][y]
-			_, _, _, alpha := data.At(x, y).RGBA()
-			newImg.Set(x, y, color.RGBA{uint8(a), uint8(a), uint8(a), uint8(alpha)})
+// 	// Process each pixel from the source image and write to the new image
+// 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+// 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+// 			a := grad_mag[x][y]
+// 			_, _, _, alpha := data.At(x, y).RGBA()
+// 			newImg.Set(x, y, color.RGBA{uint8(a), uint8(a), uint8(a), uint8(alpha)})
+// 		}
+// 	}
+// 	return newImg
+// }
+
+func sobelFilters_imp(img image.Image) (image.Image, image.Image) {
+	bounds := img.Bounds()
+	gradient := image.NewGray(bounds)
+	theta := image.NewGray(bounds)
+
+	kx := [3][3]int{
+		{-1, 0, 1},
+		{-2, 0, 2},
+		{-1, 0, 1},
+	}
+
+	ky := [3][3]int{
+		{1, 2, 1},
+		{0, 0, 0},
+		{-1, -2, -1},
+	}
+
+	for y := 1; y < bounds.Max.Y-1; y++ {
+		for x := 1; x < bounds.Max.X-1; x++ {
+			var gx, gy int
+			for i := -1; i <= 1; i++ {
+				for j := -1; j <= 1; j++ {
+					gray := img.GrayAt(x+j, y+i).Y
+					gx += int(gray) * kx[i+1][j+1]
+					gy += int(gray) * ky[i+1][j+1]
+				}
+			}
+
+			magnitude := math.Sqrt(float64(gx*gx + gy*gy))
+			angle := math.Atan2(float64(gy), float64(gx))
+
+			gradient.SetGray(x, y, color.Gray{Y: uint8(magnitude)})
+			theta.SetGray(x, y, color.Gray{Y: uint8(angle * 255 / (2 * math.Pi))})
 		}
 	}
-	return newImg
+
+	return gradient, theta
 }
 
 func grey_scale(pic image.Image) image.Image {
@@ -129,7 +168,7 @@ func main() {
 	}
 	fmt.Println("Image saved as gaussian_filter.png")
 
-	grad_image := gradient(image_gauss)
+	grad_image := sobelFilters_imp(image_gauss)
 
 	outFile_grad, err := os.Create("gradient_filter.png")
 	if err != nil {
