@@ -56,7 +56,7 @@
         function new_button(){
             var btn = document.createElement("BUTTON");        // Créer un élément <button>
             var t = document.createTextNode("CLICK ME");       // Créer un noeud textuel
-            btn.onclick = reset();
+            btn.onclick = function() {reset()};
             btn.appendChild(t);                                // Ajouter le texte au bouton
             document.getElementById("game-container").appendChild(btn);
         }
