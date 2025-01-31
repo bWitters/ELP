@@ -42,9 +42,26 @@
         const hint_list = []
         var nb_hint = 0
         function give_hint(){
-            console.log(document.getElementById('hint-input').value)
-            document.getElementById('hints-list').innerHTML += document.getElementById('hint-input').value + "<br>";
-            nb_hint += 1;
+            if (nb_hint < 5){
+                console.log(document.getElementById('hint-input').value)
+                document.getElementById('hints-list').innerHTML += document.getElementById('hint-input').value + "<br>";
+                hint_list[nb_hint] = document.getElementById('hint-input').value;
+                nb_hint += 1;
+            }
+            if (nb_hint == 5){
+                new_button()
+                nb_hint += 1;
+            }
+        }
+        function new_button(){
+            var btn = document.createElement("BUTTON");        // Créer un élément <button>
+            var t = document.createTextNode("CLICK ME");       // Créer un noeud textuel
+            btn.onclick = reset();
+            btn.appendChild(t);                                // Ajouter le texte au bouton
+            document.getElementById("game-container").appendChild(btn);
+        }
+        function reset(){
+            console.log("Ouais")
         }
         
     </script>
