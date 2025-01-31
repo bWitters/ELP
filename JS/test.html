@@ -32,19 +32,21 @@
         <h1>Just One - Jeu</h1>
         <p>Le mot mystère est : <span id="word-to-guess">???</span></p>
         <input type="text" id="hint-input" placeholder="Entrez un indice">
-        <button id="submit-hint">Soumettre</button>
+        <button id="submit-hint", onclick=give_hint()>Soumettre</button>
         <div id="hints-container">
             <h2>Indices :</h2>
             <ul id="hints-list"></ul>
         </div>
     </div>
     <script>
-        document.body.addEventListener("click", event => {
-            if (event.target.id == "submit-hint") {
-                console.log(document.getElementById('hint-input').value)
-                document.getElementById('hints-list').innerHTML += document.getElementById('hint-input').value + "<br>";
-            }
-        });
+        const hint_list = []
+        var nb_hint = 0
+        function give_hint(){
+            console.log(document.getElementById('hint-input').value)
+            document.getElementById('hints-list').innerHTML += document.getElementById('hint-input').value + "<br>";
+            nb_hint += 1;
+        }
+        
     </script>
 </body>
 </html>
