@@ -63,9 +63,9 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-  div [ class "" ]
-    [ div [ class "field"] [ Html.text ("Type in your code below:")]
-    , div [ class "field__input" ] [viewInput "text" "example: [Repeat 360 [Forward 1, Left 1]]" model.name Name]
+  div [ ]
+    [ div [ ] [ Html.text ("Type in your code below:")]
+    , div [ ] [viewInput "text" "example: [Repeat 360 [Forward 1, Left 1]]" model.name Name]
     , button [ onClick Draw ] [ Html.text "Draw" ]
     , div [] []
     , svg
