@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Just One - Jeu en ligne</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        #game-container {
+            max-width: 500px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        input, button {
+            margin: 10px;
+            padding: 10px;
+        }
+        #hints-container {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>Just One - Jeu</h1>
+        <p>Le mot mystère est : <span id="word-to-guess">???</span></p>
+        <input type="text" id="hint-input" placeholder="Entrez un indice">
+        <button id="submit-hint">Soumettre</button>
+        <div id="hints-container">
+            <h2>Indices :</h2>
+            <ul id="hints-list"></ul>
+        </div>
+    </div>
+    <script>
+        document.body.addEventListener("click", event => {
+            if (onclick = document.getElementById("submit-hint")) {
+                document.getElementById('hints-list').innerHTML = document.getElementById('hint-input').innerHTML
+            }
+        });
+    </script>
+</body>
+</html>
