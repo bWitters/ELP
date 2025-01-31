@@ -40,8 +40,9 @@
     </div>
     <script>
         document.body.addEventListener("click", event => {
-            if (onclick = document.getElementById("submit-hint")) {
-                document.getElementById('hints-list').innerHTML = document.getElementById('hint-input').innerHTML
+            if (event.target.id == "submit-hint") {
+                console.log(document.getElementById('hint-input').value)
+                document.getElementById('hints-list').innerHTML += document.getElementById('hint-input').value + "<br>";
             }
         });
     </script>
