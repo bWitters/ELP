@@ -7,20 +7,104 @@ const rl = readline.createInterface({
 
 const wordToGuess = "piano"; // Mot mystère à deviner
 let hints = [];
+let joueursRestants = 0;
+let nbPlayers
+let nbTurn = 0;
+let currentTurn = 1; 
 
 console.log("Bienvenue dans Just One - Version Console");
 console.log("Un joueur doit deviner un mot, les autres donnent un indice.");
 console.log("Si plusieurs joueurs donnent le même indice, il est supprimé !\n");
 
-function askHint() {
-    rl.question("Entrez un indice (ou tapez 'fin' pour arrêter) : ", (hint) => {
-        if (hint.toLowerCase() === 'fin') {
-            processHints();
+// Variables pour gérer le compteur
+let tempsEcoule = 0;   // Temps écoulé en secondes
+let interval;          // Référence à l'intervalle pour l'arrêter ou le réinitialiser
+
+// Fonction pour démarrer le compteur
+function startTimer() {
+    if (interval) {
+        console.log('Le compteur est déjà en cours.');
+        return;
+    }
+
+    // Démarrer l'intervalle pour mettre à jour le temps toutes les secondes
+    interval = setInterval(function() {
+        tempsEcoule++;
+    }, 1000); // 1000 ms = 1 seconde
+}
+
+// Fonction pour arrêter le compteur
+function stopTimer() {
+    if (interval) {
+        clearInterval(interval);  // Annule l'intervalle
+        interval = null;           // Réinitialise l'intervalle
+        console.log(`Temps écoulé: ${tempsEcoule} secondes`);
+    } else {
+        console.log('Le compteur n\'est pas en cours.');
+    }
+}
+
+// Fonction pour réinitialiser le compteur
+function resetTimer() {
+    tempsEcoule = 0;
+    clearInterval(interval);  // Arrête l'intervalle
+    interval = null;           // Réinitialise l'intervalle
+}
+
+function askNbTurn(){
+    rl.question("Combien de tour voulez vous jouer ? : ", (hint) => {
+        if (isNaN(hint) === false) {
+            nbTurn = Number(hint);
+            askNbPlayer();
         } else {
-            hints.push(hint.toLowerCase());
-            askHint();
+            console.log("L'entrée n'est pas un nombre !");
+            askNbTurn();
         }
     }); // Fonction qui attend d'avoir une entrée pour s'executer
+}
+
+function askNbPlayer(){
+    rl.question("A combien allez vous jouer ? : ", (hint) => {
+        if (isNaN(hint) === false) {
+            nbPlayers = Number(hint);
+            gameLoop();
+        } else {
+            console.log("L'entrée n'est pas un nombre !");
+            askNbPlayer();
+        }
+    }); // Fonction qui attend d'avoir une entrée pour s'executer
+}
+
+
+function gameLoop(){
+    if (currentTurn > nbTurn) {
+        console.log("Fin de la partie !");
+        rl.close();
+        return;
+    }
+
+    console.log(`\n--- Tour ${currentTurn}/${nbTurn} ---`);
+    hints = []; // Réinitialiser les indices
+    joueursRestants = nbPlayers; // Réinitialiser le nombre de joueurs
+    askHint();
+}
+
+function askHint() {
+    if (joueursRestants === 0) {
+        processHints();
+        return;
+    }
+    
+
+    rl.question(`Joueur ${nbPlayers - joueursRestants + 1}, entrez un indice : `, (hint) => {
+        hints.push(hint.toLowerCase());
+        joueursRestants--;
+        stopTimer();
+        resetTimer();
+        askHint();
+    }); // Fonction qui attend d'avoir une entrée pour s'executer
+
+    startTimer();
 }
 
 function processHints() {
@@ -44,8 +128,11 @@ function processHints() {
         } else {
             console.log("Dommage, le mot était :", wordToGuess);
         }
-        rl.close(); // Ferme l'objet qui lit et ecrit sur le terminal.
+
+        // Passer au tour suivant
+        currentTurn++;
+        gameLoop();
     }); // Pareil que l'autre quesion, attend une entrée dans le terminale pour proceder.
 }
 
-askHint();
+askNbTurn();
