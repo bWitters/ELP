@@ -12,7 +12,7 @@ import (
 	"github.com/anthonynsimon/bild/convolution"
 )
 
-const size int = 5
+const size int = 10
 
 func image_opener() image.Image {
 	// Open the image file
@@ -54,13 +54,14 @@ func gaussian_filter(op []float64, data image.Image, rect image.Rectangle, wg *s
 	}).SubImage(rect)
 
 	kernel := convolution.Kernel{op, size, size}
-	k := kernel.Normalized()
+	k := kernel.Normalized() // ça c'est pas bien, ça casse tout, plutot logique
 	o := &convolution.Options{Bias: 0, Wrap: false}
 	test := convolution.Convolve(subImage, k, o)
+	// Marche pas parce que ça floute sans utiliser les images voisines...
 	result <- test
 }
 
-func gradient(data image.Image, rect image.Rectangle, wg *sync.WaitGroup, result chan<- image.Image) {
+func gradient_para(data image.Image, rect image.Rectangle, wg *sync.WaitGroup, result chan<- image.Image) {
 
 	defer wg.Done()
 
@@ -71,8 +72,8 @@ func gradient(data image.Image, rect image.Rectangle, wg *sync.WaitGroup, result
 	vect := []float64{1, 0, -1}
 	vertical := convolution.Kernel{vect, 1, 3}
 	horizontal := convolution.Kernel{vect, 3, 1}
-	vert_norm := vertical.Normalized()
-	hor_norm := horizontal.Normalized()
+	vert_norm := vertical.Normalized()  // ça aussi ça doit tout casser
+	hor_norm := horizontal.Normalized() // ...
 	o := &convolution.Options{Bias: 0, Wrap: false}
 	gradient_vert := convolution.Convolve(subImage, vert_norm, o)
 	gradient_hor := convolution.Convolve(subImage, hor_norm, o)
@@ -96,6 +97,7 @@ func gradient(data image.Image, rect image.Rectangle, wg *sync.WaitGroup, result
 	newImg := image.NewRGBA(bounds)
 
 	// Process each pixel from the source image and write to the new image
+	// Marche pas à cause des bordures ?
 	for y := bounds.Min.Y; y < bounds.Max.Y-1; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X-1; x++ {
 			a := grad_mag[x][y]
@@ -104,6 +106,46 @@ func gradient(data image.Image, rect image.Rectangle, wg *sync.WaitGroup, result
 		}
 	}
 	result <- newImg
+}
+
+func gradient(data image.Image) image.Image {
+
+	vect := []float64{1, 0, -1}
+	vertical := convolution.Kernel{vect, 1, 3}
+	horizontal := convolution.Kernel{vect, 3, 1}
+	vert_norm := vertical.Normalized()
+	hor_norm := horizontal.Normalized()
+	o := &convolution.Options{Bias: 0, Wrap: false}
+	gradient_vert := convolution.Convolve(data, vert_norm, o)
+	gradient_hor := convolution.Convolve(data, hor_norm, o)
+	var grad_dir [][]float64
+	var grad_mag [][]float64
+	var grad_dir_temp []float64
+	var grad_mag_temp []float64
+	for i := data.Bounds().Min.X; i < data.Bounds().Max.X; i += 1 {
+		grad_dir_temp = []float64{}
+		grad_mag_temp = []float64{}
+		for j := data.Bounds().Min.Y; j < data.Bounds().Max.Y; j += 1 {
+			r_v, _, _, _ := gradient_vert.RGBA64At(i, j).RGBA()
+			r_h, _, _, _ := gradient_hor.RGBA64At(i, j).RGBA()
+			grad_dir_temp = append(grad_dir_temp, math.Atan(float64(r_v)/float64(r_h)))
+			grad_mag_temp = append(grad_mag_temp, math.Sqrt(math.Pow(float64(r_v), 2)+math.Pow(float64(r_h), 2)))
+		}
+		grad_dir = append(grad_dir, grad_dir_temp)
+		grad_mag = append(grad_mag, grad_mag_temp)
+	}
+	bounds := data.Bounds()
+	newImg := image.NewRGBA(bounds)
+
+	// Process each pixel from the source image and write to the new image
+	for y := bounds.Min.Y; y < bounds.Max.Y-1; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X-1; x++ {
+			a := grad_mag[x][y]
+			_, _, _, alpha := data.At(x, y).RGBA()
+			newImg.Set(x, y, color.RGBA{uint8(a), uint8(a), uint8(a), uint8(alpha)})
+		}
+	}
+	return newImg
 }
 
 func grey_scale(pic image.Image) image.Image {
@@ -119,7 +161,7 @@ func grey_scale(pic image.Image) image.Image {
 	return newImg
 }
 
-func main() {
+func applyFilters() {
 	var gaussian_mat []float64
 	gaussian_mat = gaussian_matrix(1.4, gaussian_mat)
 
@@ -132,10 +174,10 @@ func main() {
 
 	// Définir les sous-images
 	parts := []image.Rectangle{
-		{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: width / 2, Y: height / 2}},
-		{Min: image.Point{X: width / 2, Y: 0}, Max: image.Point{X: width, Y: height / 2}},
-		{Min: image.Point{X: 0, Y: height / 2}, Max: image.Point{X: width / 2, Y: height}},
-		{Min: image.Point{X: width / 2, Y: height / 2}, Max: image.Point{X: width, Y: height}},
+		{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: width/2 + size/2, Y: height/2 + size/2}},
+		{Min: image.Point{X: width/2 - size/2, Y: 0}, Max: image.Point{X: width, Y: height/2 + size/2}},
+		{Min: image.Point{X: 0, Y: height/2 - size/2}, Max: image.Point{X: width/2 + size/2, Y: height}},
+		{Min: image.Point{X: width/2 - size/2, Y: height/2 - size/2}, Max: image.Point{X: width, Y: height}},
 	}
 
 	var wg sync.WaitGroup
@@ -178,31 +220,33 @@ func main() {
 	}
 	fmt.Println("Image saved as gaussian_filter.png")
 
-	var wg_2 sync.WaitGroup
-	result_2 := make(chan image.Image, len(parts))
+	// var wg_2 sync.WaitGroup
+	// result_2 := make(chan image.Image, len(parts))
 
-	for _, rect_2 := range parts {
-		wg_2.Add(1)
-		go gradient(finalImg, rect_2, &wg_2, result_2)
-	}
+	// for _, rect_2 := range parts {
+	// 	wg_2.Add(1)
+	// 	go gradient(finalImg, rect_2, &wg_2, result_2)
+	// }
 
-	wg_2.Wait()
-	close(result)
+	// wg_2.Wait()
+	// close(result)
 
-	finalImg_2 := image.NewRGBA(finalImg.Bounds())
-	for subImg := range result_2 {
-		// Récupérer les dimensions de la sous-image
-		subBounds := subImg.Bounds()
+	// finalImg_2 := image.NewRGBA(finalImg.Bounds())
+	// for subImg := range result_2 {
+	// 	// Récupérer les dimensions de la sous-image
+	// 	subBounds := subImg.Bounds()
 
-		// Placer la sous-image au bon endroit dans finalImg_2
-		for y := subBounds.Min.Y; y < subBounds.Max.Y; y++ {
-			for x := subBounds.Min.X; x < subBounds.Max.X; x++ {
-				// Copier le pixel de la sous-image vers l'image finale
-				c := subImg.At(x, y)
-				finalImg_2.Set(x, y, c)
-			}
-		}
-	}
+	// 	// Placer la sous-image au bon endroit dans finalImg_2
+	// 	for y := subBounds.Min.Y; y < subBounds.Max.Y; y++ {
+	// 		for x := subBounds.Min.X; x < subBounds.Max.X; x++ {
+	// 			// Copier le pixel de la sous-image vers l'image finale
+	// 			c := subImg.At(x, y)
+	// 			finalImg_2.Set(x, y, c)
+	// 		}
+	// 	}
+	// }
+
+	finalImg_2 := gradient(finalImg)
 
 	outFile_grad, err := os.Create("gradient_filter.png")
 	if err != nil {
