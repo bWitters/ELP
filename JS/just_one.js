@@ -1,6 +1,7 @@
 // Utiliser des promesses chaque fois qu'on traite des operations asynchrones: des tâches qui prennent du temps et ne se terminent pas immédiatement
 const fs = require('fs').promises;  // fs: Module pour manipuler les fichiers (permet d'écrire/lire un journal des parties).
 const readline = require('readline'); // readline: Module pour interagir avec l'utilisateur via le terminal.
+const { setTimeout } = require('timers/promises');
 
 const words = [
     "word", "letter", "number", "person", "pen", "class", "people", "sound", "water", "side",
@@ -47,6 +48,14 @@ function shuffleArray(array) {
         [array[i], array[j]] = [array[j], array[i]];
     }
 }
+
+async function withTimer(callback, timeLimit) {
+    const timeoutPromise = setTimeout(timeLimit, null); // Attend `timeLimit` ms avant de renvoyer `null`
+    const actionPromise = callback(); // Exécute la fonction passée en paramètre
+
+    return Promise.race([timeoutPromise, actionPromise]); // La première promesse terminée gagne
+}
+
 
 // Normalize text (removes accents and makes lowercase)
 // Met le texte en minuscules et supprime les accents pour éviter les erreurs dues aux variantes d'écriture.
@@ -179,18 +188,28 @@ function playRound() {
         let playerCount = 0; // keeps track of how many players have given a clue.
         
         // Fucntion recursively collects clues from all players except the guesser.
-        function getClues() {
-            if (playerCount < numPlayers - 1) { // One player is the guesser, so the remaining numPlayers - 1 players must provide clues.
-                const clueGiver = (currentGuesserIndex + 1 + playerCount) % numPlayers + 1; // ensures that each player (except the guesser) gives exactly one clue.
-                rl.question(`Player ${clueGiver}, enter your clue: `, (clue) => {
+        async function getClues() {
+            if (playerCount < numPlayers - 1) {
+                const clueGiver = (currentGuesserIndex + 1 + playerCount) % numPlayers + 1;
+        
+                console.log(`⏳ Player ${clueGiver}, you have 30 seconds to give a clue...`);
+        
+                const clue = await withTimer(() => new Promise((resolve) => {
+                    rl.question(`Player ${clueGiver}, enter your clue: `, resolve);
+                }), 30000); // 30 secondes
+        
+                if (clue === null) {
+                    console.log(`❌ Player ${clueGiver} ran out of time!`);
+                } else {
                     clues.push(clue);
-                    playerCount++;
-                    getClues();
-                });
-            } else { // once all the clues are collected 
+                }
+        
+                playerCount++;
+                getClues();
+            } else {
                 clues = removeDuplicateClues(clues, chosenWord);
                 console.log("\n✅ Clues collected: " + clues.join(", "));
-                askForGuess(chosenWord, clues); // move on to the guessing phase with the cl
+                askForGuess(chosenWord, clues);
             }
         }
 
@@ -199,39 +218,33 @@ function playRound() {
 }
 
 // Handle player guess
-function askForGuess(wordToGuess, clues) {
+async function askForGuess(wordToGuess, clues) {
     const guesser = currentGuesserIndex + 1;
 
-    rl.question(`\n🎯 Player ${guesser}, guess the word: `, (guess) => {
+    console.log(`⏳ Player ${guesser}, you have 30 seconds to guess...`);
+
+    const guess = await withTimer(() => new Promise((resolve) => {
+        rl.question(`\n🎯 Player ${guesser}, guess the word: `, resolve);
+    }), 30000); // 30 secondes
+
+    if (guess === null) {
+        console.log(`❌ Time is up! The correct word was "${wordToGuess}".\n`);
+    } else {
         const result = guess.toLowerCase() === wordToGuess ? 'correct' : 'incorrect';
-
-        // Update score if correct
-        if (result === 'correct') {
-            scores[currentGuesserIndex]++;
-        }
-
-        // Save game turn data
-        const turnData = {
-            round: currentRound,
-            guesser: guesser,
-            wordToGuess,
-            clues,
-            guess,
-            result,
-            scores: [...scores],
-            timestamp: new Date().toISOString(),
-        };
+        if (result === 'correct') scores[currentGuesserIndex]++;
 
         console.log(result === 'correct' ? "\n🎉 Correct! Well done!\n" : `\n❌ Wrong! The correct word was "${wordToGuess}".\n`);
+    }
 
-        // Save game turn and then move to the next round
-        saveGameTurn(turnData).then(() => {
+    // Sauvegarde et passe au tour suivant
+    saveGameTurn({ round: currentRound, guesser, wordToGuess, clues, guess, timestamp: new Date().toISOString() })
+        .then(() => {
             currentGuesserIndex = (currentGuesserIndex + 1) % numPlayers;
             currentRound++;
             playRound();
-        });     
-    });
+        });
 }
+
 
 // End game and show final scores and ranking
 function endGame() {

@@ -1,0 +1,34 @@
+[
+  {
+    "round": 1,
+    "guesser": 1,
+    "wordToGuess": "child",
+    "clues": [
+      "cocou",
+      "enfant"
+    ],
+    "guess": null,
+    "timestamp": "2025-02-07T15:41:24.400Z"
+  },
+  {
+    "round": 1,
+    "guesser": 1,
+    "wordToGuess": "color",
+    "clues": [
+      "bleu",
+      "rouge"
+    ],
+    "guess": "couleur",
+    "timestamp": "2025-02-07T15:44:18.328Z"
+  },
+  {
+    "round": 2,
+    "guesser": 2,
+    "wordToGuess": "letter",
+    "clues": [
+      "az"
+    ],
+    "guess": null,
+    "timestamp": "2025-02-07T15:45:21.555Z"
+  }
+]

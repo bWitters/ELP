@@ -1,25 +1,15 @@
 {
   "dependencies": {
     "prompt-sync": "^4.2.0",
+    "timers": "^0.1.1",
     "word-list-json": "^0.2.0"
   },
   "name": "js",
   "version": "1.0.0",
   "description": "Just One est un jeu de devinettes en ligne de commande inspiré du jeu de société \"Just One\". Les joueurs doivent donner des indices uniques pour aider un joueur à deviner un mot secret.",
   "main": "just_one.js",
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node just_one.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/themerehayden/Projet_JS.git"
-  },
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/themerehayden/Projet_JS/issues"
-  },
-  "homepage": "https://github.com/themerehayden/Projet_JS#readme"
+  }
 }
