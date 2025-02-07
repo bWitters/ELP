@@ -1,17 +1,20 @@
 const readline = require('readline');
+const fs = require('fs');
 
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 }); // Définie l'objet rl qui lit les entrées du terminale et envoye les sorties dans le terminal
 
-const wordToGuess = "piano"; // Mot mystère à deviner
+var wordToGuess; // Mot mystère à deviner
+// const wordToGuess = "piano";
 let hints = [];
 let joueursRestants = 0;
-let nbPlayers
+let nbPlayers = 0;
 let nbTurn = 0;
 let currentTurn = 1; 
-
+let file = "liste_francais.txt";
+let lignes;
 console.log("Bienvenue dans Just One - Version Console");
 console.log("Un joueur doit deviner un mot, les autres donnent un indice.");
 console.log("Si plusieurs joueurs donnent le même indice, il est supprimé !\n");
@@ -20,6 +23,18 @@ console.log("Si plusieurs joueurs donnent le même indice, il est supprimé !\n"
 let tempsEcoule = 0;   // Temps écoulé en secondes
 let interval;          // Référence à l'intervalle pour l'arrêter ou le réinitialiser
 
+// Lecture du fichier :
+function lectureFichier() {
+    fs.readFile(file, 'utf8', (err, data) => {
+        if (err) {
+            console.error('Erreur de lecture:', err);
+            return;
+        }
+        lignes = data.split(/\r?\n/);
+        askNbTurn();
+
+    });
+}
 // Fonction pour démarrer le compteur
 function startTimer() {
     if (interval) {
@@ -84,6 +99,8 @@ function gameLoop(){
     }
 
     console.log(`\n--- Tour ${currentTurn}/${nbTurn} ---`);
+    wordToGuess = lignes[Math.floor(Math.random() * lignes.length)];
+    console.log(`\nMot à deviner : ${wordToGuess}`);
     hints = []; // Réinitialiser les indices
     joueursRestants = nbPlayers; // Réinitialiser le nombre de joueurs
     askHint();
@@ -117,7 +134,7 @@ function processHints() {
     // Object.keys() c'est les clefs du dictionnaire hintCount.
     // Array.filter() ici filtre sur le fait que pour un hint, la valeur dans le dictionnaire soit égale à 1.
 
-    
+    console.log("\x1Bc")
     console.log("\nIndices valides :", uniqueHints.length > 0 ? uniqueHints.join(", ") : "Aucun (tous supprimés)");
     // Test, si la taille de la liste uniqueHints > 0 alors on affiche les elements de la liste séparé par des virgules
     // Sinon on affiche Aucun (tous supprimés).
@@ -135,4 +152,4 @@ function processHints() {
     }); // Pareil que l'autre quesion, attend une entrée dans le terminale pour proceder.
 }
 
-askNbTurn();
+lectureFichier();
