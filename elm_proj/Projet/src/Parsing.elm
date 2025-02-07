@@ -1,5 +1,5 @@
 module Parsing exposing (..)
-import Parser exposing (Parser, (|.), (|=), lazy, int,symbol, spaces, chompWhile, oneOf, map, succeed, getChompedString, andThen, float)
+import Parser exposing (Parser, (|.), (|=), keyword, run, DeadEnd, end, lazy, int,symbol, spaces, chompWhile, oneOf, map, succeed, getChompedString, andThen, float, sequence)
 
 
 type Instruction
@@ -9,100 +9,66 @@ type Instruction
     | Repeat Int (List Instruction)  -- Répète un ensemble d'instructions
 
 
-read : Parser String
-read =            
-  succeed Instruction
-    (|.) symbol "["
+-- Parsers pour les différentes instructions
+pForward : Parser Instruction
+pForward =
+    succeed Forward
+        |. keyword "Forward"
+        |. spaces
+        |= float
 
+pLeft : Parser Instruction
+pLeft =
+    succeed Left
+        |. keyword "Left"
+        |. spaces
+        |= float
 
+pRight : Parser Instruction
+pRight =
+    succeed Right
+        |. keyword "Right"
+        |. spaces
+        |= float
 
+pRepeat : Parser Instruction
+pRepeat =
+    succeed Repeat
+        |. keyword "Repeat"
+        |. spaces
+        |= int
+        |. spaces
+        |. symbol "["
+        |. spaces
+        |= lazy (\_ -> pInstructionList)
+        |. spaces
+        |. symbol "]"
 
+pInstruction : Parser Instruction
+pInstruction =
+    oneOf [ pForward, pLeft, pRight, pRepeat ]
 
+pInstructionList : Parser (List Instruction)
+pInstructionList =
+    sequence
+        { start = ""
+        , separator = ","
+        , end = ""
+        , spaces = spaces
+        , item = lazy (\_ -> pInstruction)
+        , trailing = Parser.Forbidden
+        }
 
+parser : Parser (List Instruction)
+parser =  
+    succeed identity
+        |. symbol "["
+        |. spaces
+        |= pInstructionList
+        |. spaces
+        |. symbol "]"
+        |. end
 
-
-
-
-
-
-
-
--- type Instruction
---     = Forward Float             -- Avance d'une certaine distance
---     | Left Float                -- Tourne à gauche d'un certain angle
---     | Right Float               -- Tourne à droite d'un certain angle
---     | Repeat Int (List Instruction)  -- Répète un ensemble d'instructions
-
--- type alias Resultat = List Instruction
-
--- read : Parser Resultat
--- read =
---   succeed head Resultat
---     (|.) (symbol "[") 
---     |. spaces
---     |= lazy (\_ -> boolean) 
---     |. spaces
---     |= int
---     |. spaces
---     |= lazy 
-
---   |. spaces
---   |. symbol "]"
-
-
--- forwardParser : Parser Instruction
--- forwardParser =
---     map Forward
---         (succeed Forward
---             |> andThen (\_ -> spaces)
---             |> andThen (\_ -> float)
---         )
-
-
--- leftParser : Parser Instruction
--- leftParser =
---     map Left
---         (succeed Left
---             |> andThen (\_ -> spaces)
---             |> andThen (\_ -> float)
---         )
-
-
-
--- rightParser : Parser Instruction
--- rightParser =
---     map Right
---         (succeed Right
---             |> andThen (\_ -> spaces)
---             |> andThen (\_ -> float)
---         )
-
-
--- repeatParser : Parser Instruction
--- repeatParser =
---   succeed ()
---   |. symbol "Repeat"
---   |. spaces
---   repeatCount <- float
---   spaces
---   instructions <- list instructionParser
---   succeed (Repeat (round repeatCount) instructions)
-
-
-
--- instructionParser : Parser Instruction
--- instructionParser =
---     oneOf [ forwardParser, leftParser, rightParser, repeatParser ]
-
-
--- instructionListParser : Parser (List Instruction)
--- instructionListParser =
---     symbol "[" 
---         |> andThen (\_ -> spaces)
---         |> andThen (\_ -> list instructionParser)
---         |> andThen (\instructions -> spaces |> symbol "]" |> succeed instructions)
-
-
--- parseInstructions : String -> Result String (List Instruction)
--- parseInstructions input =
---     Parser.run instructionListParser input
+parseInstructions : String -> Result (List DeadEnd) (List Instruction)
+parseInstructions input =
+    run parser input
