@@ -5340,7 +5340,7 @@ var $author$project$Main$update = F2(
 			case 'Draw':
 				return _Utils_update(
 					model,
-					{draw: 'oui'});
+					{draw: model.content});
 			default:
 				var newContent = msg.a;
 				return _Utils_update(
@@ -6580,7 +6580,7 @@ var $author$project$Main$view = function (model) {
 					])),
 				A2($elm$html$Html$div, _List_Nil, _List_Nil),
 				$author$project$Drawer$viewSvg(
-				$author$project$Parsing$read(model.content))
+				$author$project$Parsing$read(model.draw))
 			]));
 };
 var $author$project$Main$main = $elm$browser$Browser$sandbox(

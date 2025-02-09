@@ -55,7 +55,7 @@ update msg model =
       { model | name = name }
     
     Draw ->
-      { model | draw = "oui"}
+      { model | draw = model.content}
     
     Change newContent ->
       { model | content = newContent }
@@ -72,5 +72,5 @@ view model =
     , input [ placeholder "Text to reverse", value model.content, onInput Change ] []
     , button [ onClick Draw ] [ Html.text "Draw" ]
     , div [] []
-    , Drawer.viewSvg (Parsing.read model.content)
+    , Drawer.viewSvg (Parsing.read model.draw)
     ]
