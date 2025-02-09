@@ -1,5 +1,5 @@
 module Parsing exposing (..)
-import Parser exposing (Parser, (|.), (|=), keyword, run, end, lazy, int,symbol, spaces, oneOf, succeed, float, sequence)
+import Parser exposing (Parser, (|.), (|=), keyword, run, end, lazy, int, symbol, spaces, oneOf, succeed, float, sequence)
 
 updateState : Instruction -> State -> ( State, List Point )
 updateState instruction state =

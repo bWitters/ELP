@@ -67,10 +67,26 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-  div [ ]
-    [ div [ ] [ Html.text ("Type in your code below:")]
-    , input [ placeholder "Text to reverse", value model.content, onInput Change ] []
-    , button [ onClick Draw ] [ Html.text "Draw" ]
-    , div [] []
-    , Drawer.viewSvg (Parsing.read model.draw)
-    ]
+    div [ Html.Attributes.class "page" ]  -- Root div wrapping everything
+        [ p [] [ Html.text "Type in your code below:" ]  -- Instruction text
+
+        -- Input field wrapper
+        , div [ Html.Attributes.class "field field_v1" ]
+            [ input 
+                [ Html.Attributes.type_ "text"
+                , placeholder "example: [Repeat 360 [Forward 1, Left 1]]"
+                , value model.content
+                , onInput Change
+                , Html.Attributes.class "field__input"
+                ] []
+            ]
+
+        -- Button
+        , button 
+            [ onClick Draw, Html.Attributes.class "error" ]  -- Using 'error' class for button styling
+            [ Html.text "Draw" ]
+
+        -- SVG Container (Empty for drawing)
+        , div [ Html.Attributes.class "error" ]  -- Ensures proper styling and visibility
+                [Drawer.viewSvg (Parsing.read model.draw)]  -- Render parsed commands here
+        ]
