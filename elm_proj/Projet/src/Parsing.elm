@@ -1,7 +1,61 @@
 module Parsing exposing (..)
-import Parser exposing (Parser, (|.), (|=), keyword, run, DeadEnd, end, lazy, int,symbol, spaces, chompWhile, oneOf, map, succeed, getChompedString, andThen, float, sequence)
+import Parser exposing (Parser, (|.), (|=), keyword, run, end, lazy, int,symbol, spaces, oneOf, succeed, float, sequence)
 
+updateState : Instruction -> State -> ( State, List Point )
+updateState instruction state =
+    case instruction of
+        Forward d ->
+            let
+                rad = degrees state.angle
+                newX = Tuple.first state.position + d * cos rad
+                newY = Tuple.second state.position + d * sin rad
+                newPos = (newX, newY)
+                newState =  { state | position = newPos, path = state.path ++ [newPos] }
+            in
+            ( newState, [newPos] )
 
+        Left a ->
+            ({ state | angle = state.angle - a }, [])
+
+        Right a ->
+            ({ state | angle = state.angle + a }, [])
+
+        Repeat n instructions ->
+            let
+                ( finalState, points ) =
+                    List.foldl
+                        (\_ ( currentState, accPoints ) ->
+                            let
+                                ( newState, newPoints ) =
+                                    executeInstructions instructions currentState
+                            in
+                            ( newState, accPoints ++ newPoints )
+                        )
+                        ( state, [] )
+                        (List.repeat n ())
+            in
+            ( finalState, points )
+
+executeInstructions : List Instruction -> State -> ( State, List Point )
+executeInstructions instructions state =
+    List.foldl
+        (\instruction ( currentState, accPoints ) ->
+            let
+                ( newState, newPoints ) =
+                    updateState instruction currentState
+            in
+            ( newState, accPoints ++ newPoints )
+        )
+        ( state, [] )
+        instructions
+type alias Point = (Float, Float)
+
+type alias State =
+    { position : Point
+    , angle : Float
+    , path : List Point
+    }
+    
 type Instruction
     = Forward Float             -- Avance d'une certaine distance
     | Left Float                -- Tourne à gauche d'un certain angle
@@ -69,6 +123,21 @@ parser =
         |. symbol "]"
         |. end
 
-parseInstructions : String -> Result (List DeadEnd) (List Instruction)
-parseInstructions input =
-    run parser input
+
+read : String -> List Point
+read input =
+    case run parser input of
+        Ok instructions ->
+            let
+                initialState : State
+                initialState =
+                    { position = (250,250) 
+                    , angle = 0
+                    , path = [(0,0)]
+                    }
+                (_, points) = executeInstructions instructions initialState
+            in
+            (250, 250) :: points
+
+        Err _ ->
+            []

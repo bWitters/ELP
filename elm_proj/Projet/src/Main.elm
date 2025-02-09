@@ -10,10 +10,9 @@ import Parsing
 import Drawer
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick)
+import Html.Events exposing (onClick,onInput)
 import Svg exposing (..)
-import Svg.Attributes exposing (..) 
-
+import Svg.Attributes exposing (..)
 
 
 -- MAIN
@@ -30,12 +29,13 @@ main =
 type alias Model =
   { name : String
   , draw : String
+  , content : String
   }
 
 
 init : Model
 init =
-  Model "" ""
+  Model "" "" ""
 
 
 
@@ -45,6 +45,7 @@ init =
 type Msg
   = Name String
   | Draw 
+  | Change String
 
 
 update : Msg -> Model -> Model
@@ -55,6 +56,9 @@ update msg model =
     
     Draw ->
       { model | draw = "oui"}
+    
+    Change newContent ->
+      { model | content = newContent }
 
 
 
@@ -65,19 +69,8 @@ view : Model -> Html Msg
 view model =
   div [ ]
     [ div [ ] [ Html.text ("Type in your code below:")]
-    , div [ ] [viewInput "text" "example: [Repeat 360 [Forward 1, Left 1]]" model.name Name]
+    , input [ placeholder "Text to reverse", value model.content, onInput Change ] []
     , button [ onClick Draw ] [ Html.text "Draw" ]
     , div [] []
-    , svg
-        [ Svg.Attributes.width "500"
-        , Svg.Attributes.height "500"
-        , viewBox "0 0 500 500"
-        , Svg.Attributes.style "border: 1px solid gray" -- pour voir les limites de la zone
-        ]
-        []
+    , Drawer.viewSvg (Parsing.read model.content)
     ]
-    
-
-viewInput : String -> String -> String -> (String -> msg) -> Html msg
-viewInput t p v toMsg =
-  input [ Html.Attributes.type_ t, placeholder p, value v ] []
