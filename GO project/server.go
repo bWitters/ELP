@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
+	"io"
 	"math"
 	"net"
 	"os"
 	"strconv"
 	"sync"
-
-	"github.com/anthonynsimon/bild/convolution"
+	"time"
 )
 
 // Fonction pour appliquer un filtre
@@ -25,6 +26,7 @@ func image_opener() image.Image {
 		return nil
 	}
 	defer file.Close()
+	fmt.Println("image_opened")
 
 	// Decode the image
 	img, err := png.Decode(file)
@@ -34,121 +36,6 @@ func image_opener() image.Image {
 	}
 	fmt.Println("Image format:", "png")
 	return img
-}
-
-func gaussian_matrix(sigma float64, gaussian_m []float64) []float64 {
-	k := 0
-	for i := -size / 2; i <= size/2; i++ {
-		for j := -size / 2; j <= size/2; j++ {
-			var pos_a float64 = float64(i)
-			var pos_b float64 = float64(j)
-			gaussian_m = append(gaussian_m, math.Exp(-(pos_a*pos_a+pos_b*pos_b)/(2*sigma))/(2*math.Pi*(sigma*sigma)))
-			k += 1
-		}
-	}
-	return gaussian_m
-}
-
-func gaussian_filter(op []float64, data image.Image, rect image.Rectangle, wg *sync.WaitGroup, result chan<- image.Image) { // With convolve func
-	defer wg.Done()
-
-	subImage := data.(interface {
-		SubImage(r image.Rectangle) image.Image
-	}).SubImage(rect)
-
-	kernel := convolution.Kernel{op, size, size}
-	k := kernel.Normalized() // ça c'est pas bien, ça casse tout, plutot logique
-	o := &convolution.Options{Bias: 0, Wrap: false}
-	test := convolution.Convolve(subImage, k, o)
-	// Marche pas parce que ça floute sans utiliser les images voisines...
-	result <- test
-}
-
-func gradient_para(data image.Image, rect image.Rectangle, wg *sync.WaitGroup, result chan<- image.Image) {
-
-	defer wg.Done()
-
-	subImage := data.(interface {
-		SubImage(r image.Rectangle) image.Image
-	}).SubImage(rect)
-
-	vect := []float64{1, 0, -1}
-	vertical := convolution.Kernel{vect, 1, 3}
-	horizontal := convolution.Kernel{vect, 3, 1}
-	vert_norm := vertical.Normalized()  // ça aussi ça doit tout casser
-	hor_norm := horizontal.Normalized() // ...
-	o := &convolution.Options{Bias: 0, Wrap: false}
-	gradient_vert := convolution.Convolve(subImage, vert_norm, o)
-	gradient_hor := convolution.Convolve(subImage, hor_norm, o)
-	var grad_dir [][]float64
-	var grad_mag [][]float64
-	var grad_dir_temp []float64
-	var grad_mag_temp []float64
-	for i := subImage.Bounds().Min.X; i < subImage.Bounds().Max.X; i += 1 {
-		grad_dir_temp = []float64{}
-		grad_mag_temp = []float64{}
-		for j := subImage.Bounds().Min.Y; j < subImage.Bounds().Max.Y; j += 1 {
-			r_v, _, _, _ := gradient_vert.RGBA64At(i, j).RGBA()
-			r_h, _, _, _ := gradient_hor.RGBA64At(i, j).RGBA()
-			grad_dir_temp = append(grad_dir_temp, math.Atan(float64(r_v)/float64(r_h)))
-			grad_mag_temp = append(grad_mag_temp, math.Sqrt(math.Pow(float64(r_v), 2)+math.Pow(float64(r_h), 2)))
-		}
-		grad_dir = append(grad_dir, grad_dir_temp)
-		grad_mag = append(grad_mag, grad_mag_temp)
-	}
-	bounds := subImage.Bounds()
-	newImg := image.NewRGBA(bounds)
-
-	// Process each pixel from the source image and write to the new image
-	// Marche pas à cause des bordures ?
-	for y := bounds.Min.Y; y < bounds.Max.Y-1; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X-1; x++ {
-			a := grad_mag[x][y]
-			_, _, _, alpha := subImage.At(x, y).RGBA()
-			newImg.Set(x, y, color.RGBA{uint8(a), uint8(a), uint8(a), uint8(alpha)})
-		}
-	}
-	result <- newImg
-}
-
-func gradient(data image.Image) image.Image {
-
-	vect := []float64{1, 0, -1}
-	vertical := convolution.Kernel{vect, 1, 3}
-	horizontal := convolution.Kernel{vect, 3, 1}
-	vert_norm := vertical.Normalized()
-	hor_norm := horizontal.Normalized()
-	o := &convolution.Options{Bias: 0, Wrap: false}
-	gradient_vert := convolution.Convolve(data, vert_norm, o)
-	gradient_hor := convolution.Convolve(data, hor_norm, o)
-	var grad_dir [][]float64
-	var grad_mag [][]float64
-	var grad_dir_temp []float64
-	var grad_mag_temp []float64
-	for i := data.Bounds().Min.X; i < data.Bounds().Max.X; i += 1 {
-		grad_dir_temp = []float64{}
-		grad_mag_temp = []float64{}
-		for j := data.Bounds().Min.Y; j < data.Bounds().Max.Y; j += 1 {
-			r_v, _, _, _ := gradient_vert.RGBA64At(i, j).RGBA()
-			r_h, _, _, _ := gradient_hor.RGBA64At(i, j).RGBA()
-			grad_dir_temp = append(grad_dir_temp, math.Atan(float64(r_v)/float64(r_h)))
-			grad_mag_temp = append(grad_mag_temp, math.Sqrt(math.Pow(float64(r_v), 2)+math.Pow(float64(r_h), 2)))
-		}
-		grad_dir = append(grad_dir, grad_dir_temp)
-		grad_mag = append(grad_mag, grad_mag_temp)
-	}
-	bounds := data.Bounds()
-	newImg := image.NewRGBA(bounds)
-
-	// Process each pixel from the source image and write to the new image
-	for y := bounds.Min.Y; y < bounds.Max.Y-1; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X-1; x++ {
-			a := grad_mag[x][y]
-			_, _, _, alpha := data.At(x, y).RGBA()
-			newImg.Set(x, y, color.RGBA{uint8(a), uint8(a), uint8(a), uint8(alpha)})
-		}
-	}
-	return newImg
 }
 
 func grey_scale(pic image.Image) image.Image {
@@ -164,112 +51,252 @@ func grey_scale(pic image.Image) image.Image {
 	return newImg
 }
 
-func applyFilters() image.Image {
-	var gaussian_mat []float64
-	gaussian_mat = gaussian_matrix(1.4, gaussian_mat)
+func splitImage(width, height, rows, cols, padding int) []image.Rectangle {
+	parts := []image.Rectangle{}
+	cellWidth := width / cols
+	cellHeight := height / rows
 
-	var pic = image_opener()
+	for row := 0; row < rows; row++ {
+		for col := 0; col < cols; col++ {
+			x0 := col*cellWidth - padding
+			y0 := row*cellHeight - padding
+			x1 := (col+1)*cellWidth + padding
+			y1 := (row+1)*cellHeight + padding
 
-	var image_gray_scale image.Image = grey_scale(pic)
-	// Diviser l'image en 4 parties
-	width := image_gray_scale.Bounds().Dx()
-	height := image_gray_scale.Bounds().Dy()
+			// Empêcher les débordements hors de l'image
+			if x0 < 0 {
+				x0 = 0
+			}
+			if y0 < 0 {
+				y0 = 0
+			}
+			if x1 > width {
+				x1 = width
+			}
+			if y1 > height {
+				y1 = height
+			}
 
-	// Définir les sous-images
-	parts := []image.Rectangle{
-		{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: width/2 + size/2, Y: height/2 + size/2}},
-		{Min: image.Point{X: width/2 - size/2, Y: 0}, Max: image.Point{X: width, Y: height/2 + size/2}},
-		{Min: image.Point{X: 0, Y: height/2 - size/2}, Max: image.Point{X: width/2 + size/2, Y: height}},
-		{Min: image.Point{X: width/2 - size/2, Y: height/2 - size/2}, Max: image.Point{X: width, Y: height}},
+			parts = append(parts, image.Rect(x0, y0, x1, y1))
+		}
 	}
+
+	return parts
+}
+
+// Convolution sur une image.Image avec un noyau
+func ConvolveImage(img image.Image, kernel [][]float64) *image.Gray {
+	bounds := img.Bounds()
+	width, height := bounds.Max.X, bounds.Max.Y
+	kernelSize := len(kernel)
+	pad := kernelSize / 2
+
+	// Créer une nouvelle image en niveaux de gris pour stocker le résultat
+	grayImg := image.NewGray(bounds)
+	draw.Draw(grayImg, bounds, img, bounds.Min, draw.Src)
+
+	result := image.NewGray(bounds)
+
+	// Appliquer la convolution
+	for y := pad; y < height-pad; y++ {
+		for x := pad; x < width-pad; x++ {
+			sum := 0.0
+			for ky := 0; ky < kernelSize; ky++ {
+				for kx := 0; kx < kernelSize; kx++ {
+					// Calculer les coordonnées de l'image source
+					srcX := x + kx - pad
+					srcY := y + ky - pad
+
+					// Récupérer l'intensité en niveau de gris
+					grayValue := float64(grayImg.GrayAt(srcX, srcY).Y)
+
+					// Appliquer le filtre
+					sum += grayValue * kernel[ky][kx]
+				}
+			}
+			// Clamper les valeurs entre 0 et 255
+			clamped := uint8(max(0, min(255, int(sum))))
+			result.SetGray(x, y, color.Gray{Y: clamped})
+		}
+	}
+	return result
+}
+
+// Fonctions utilitaires pour éviter les débordements
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// Fonction pour créer un noyau de flou gaussien
+func gaussianKernel(sigma float64) [][]float64 {
+	// Déterminer la taille du noyau (taille impaire pour centrer sur le pixel)
+	size := int(math.Ceil(6 * sigma)) // Taille ≈ 6σ
+	if size%2 == 0 {
+		size++ // S'assurer que la taille est impaire
+	}
+
+	kernel := make([][]float64, size)
+	for i := range kernel {
+		kernel[i] = make([]float64, size)
+	}
+
+	// Calculer les valeurs du noyau
+	sum := 0.0
+	half := size / 2
+	for i := -half; i <= half; i++ {
+		for j := -half; j <= half; j++ {
+			exponent := -(float64(i*i+j*j) / (2 * sigma * sigma))
+			value := math.Exp(exponent) / (2 * math.Pi * sigma * sigma)
+			kernel[i+half][j+half] = value
+			sum += value
+		}
+	}
+
+	// Normalisation (pour que la somme du noyau = 1)
+	for i := range kernel {
+		for j := range kernel[i] {
+			kernel[i][j] /= sum
+		}
+	}
+
+	return kernel
+}
+
+func BlurKernel(size int) [][]float64 {
+	if size%2 == 0 || size < 3 {
+		size = 3 // Forcer un kernel impair >= 3
+	}
+
+	kernel := make([][]float64, size)
+	coeff := 1.0 / float64(size*size)
+
+	for i := range kernel {
+		kernel[i] = make([]float64, size)
+		for j := range kernel[i] {
+			kernel[i][j] = coeff
+		}
+	}
+	return kernel
+}
+
+func SobelXKernel() [][]float64 {
+	return [][]float64{
+		{-1, 0, 1},
+		{-2, 0, 2},
+		{-1, 0, 1},
+	}
+}
+
+func SobelYKernel() [][]float64 {
+	return [][]float64{
+		{-1, -2, -1},
+		{0, 0, 0},
+		{1, 2, 1},
+	}
+}
+
+func SharpenKernel() [][]float64 {
+	return [][]float64{
+		{0, -1, 0},
+		{-1, 5, -1},
+		{0, -1, 0},
+	}
+}
+
+func applyFilters(chosenFilter string) image.Image {
+	pic := image_opener()
+	imageGray := grey_scale(pic)
+
+	// Vieux
+	// kernel := gaussianKernel(5)
+	// kernelSize := len(kernel)
+	// -Vieux
+
+	// Appliquer le filtre choisi
+	var kernel [][]float64
+
+	// Déterminer le noyau de convolution basé sur le filtre choisi
+	switch chosenFilter {
+	case "blur":
+		kernel = BlurKernel(5) // Flou
+	case "sobelX":
+		kernel = SobelXKernel() // Noyau de Sobel X
+	case "sobelY":
+		kernel = SobelYKernel() // Noyau de Sobel Y
+	case "sharpen":
+		kernel = SharpenKernel() // Noyau de sharpening
+	case "gaussianFilter":
+		kernel = gaussianKernel(5) // Noyau de flou gaussien
+	default:
+		fmt.Println("Filtre non reconnu.")
+		return nil
+	}
+
+	kernelSize := len(kernel)
+
+	width := imageGray.Bounds().Dx()
+	height := imageGray.Bounds().Dy()
+	rows, cols := 1, 1 // Bizarre quand on divise l'image ça ralenti, cause potentiel : cout de la division, cout du padding, cout de la création des workers
+	padding := kernelSize / 2
+
+	start := time.Now()
+	parts := splitImage(width, height, rows, cols, padding)
 
 	var wg sync.WaitGroup
 	result := make(chan image.Image, len(parts))
 
+	// Appliquer le filtre en parallèle
 	for _, rect := range parts {
 		wg.Add(1)
-		go gaussian_filter(gaussian_mat, image_gray_scale, rect, &wg, result)
+		go func(r image.Rectangle) {
+			defer wg.Done()
+			subImg := ConvolveImage(imageGray, kernel) // Appliquer filtre
+			result <- subImg
+		}(rect)
 	}
 
 	wg.Wait()
 	close(result)
 
-	finalImg := image.NewRGBA(image_gray_scale.Bounds())
+	// Reconstruction de l'image
+	finalImg := image.NewRGBA(imageGray.Bounds())
 	for subImg := range result {
-		// Récupérer les dimensions de la sous-image
 		subBounds := subImg.Bounds()
-
-		// Placer la sous-image au bon endroit dans finalImg
-		for y := subBounds.Min.Y; y < subBounds.Max.Y; y++ {
-			for x := subBounds.Min.X; x < subBounds.Max.X; x++ {
-				// Copier le pixel de la sous-image vers l'image finale
+		for y := subBounds.Min.Y + padding; y < subBounds.Max.Y-padding; y++ {
+			for x := subBounds.Min.X + padding; x < subBounds.Max.X-padding; x++ {
 				c := subImg.At(x, y)
 				finalImg.Set(x, y, c)
 			}
 		}
 	}
+	duration := time.Since(start)
+	fmt.Println(duration)
 
-	outFile, err := os.Create("gaussian_filter.png")
-	if err != nil {
-		fmt.Println("Error creating file:", err)
-		return
-	}
-	defer outFile.Close()
-
-	err = png.Encode(outFile, finalImg) // Use jpeg.Encode for JPEG images
-	if err != nil {
-		fmt.Println("Error encoding image:", err)
-		return
-	}
-	fmt.Println("Image saved as gaussian_filter.png")
-
-	// var wg_2 sync.WaitGroup
-	// result_2 := make(chan image.Image, len(parts))
-
-	// for _, rect_2 := range parts {
-	// 	wg_2.Add(1)
-	// 	go gradient(finalImg, rect_2, &wg_2, result_2)
-	// }
-
-	// wg_2.Wait()
-	// close(result)
-
-	// finalImg_2 := image.NewRGBA(finalImg.Bounds())
-	// for subImg := range result_2 {
-	// 	// Récupérer les dimensions de la sous-image
-	// 	subBounds := subImg.Bounds()
-
-	// 	// Placer la sous-image au bon endroit dans finalImg_2
-	// 	for y := subBounds.Min.Y; y < subBounds.Max.Y; y++ {
-	// 		for x := subBounds.Min.X; x < subBounds.Max.X; x++ {
-	// 			// Copier le pixel de la sous-image vers l'image finale
-	// 			c := subImg.At(x, y)
-	// 			finalImg_2.Set(x, y, c)
-	// 		}
-	// 	}
-	// }
-
-	finalImg_2 := gradient(finalImg)
-
-	return finalImg_2
-	// outFile_grad, err := os.Create("gradient_filter.png")
-	// if err != nil {
-	// 	fmt.Println("Error creating file:", err)
-	// 	return
-	// }
-	// defer outFile_grad.Close()
-
-	// err = png.Encode(outFile_grad, finalImg_2) // Use jpeg.Encode for JPEG images
-	// if err != nil {
-	// 	fmt.Println("Error encoding image:", err)
-	// 	return
-	// }
-	// fmt.Println("Image saved as gradient_filter.png")
+	return finalImg
 }
 
 func handleClient(conn net.Conn) {
 	defer conn.Close()
 	fmt.Println("Client connecté :", conn.RemoteAddr())
+
+	// // Lire le type de filtre choisi par le client
+	// var filterType [50]byte
+	// _, err := conn.Read(filterType[:])
+	// if err != nil {
+	// 	fmt.Println("Erreur lecture du type de filtre:", err)
+	// 	return
+	// }
+	// chosenFilter := string(filterType[:])
 
 	// Ouvrir un fichier temporaire pour stocker l'image reçue
 	tempFile, err := os.Create("received.png")
@@ -279,15 +306,32 @@ func handleClient(conn net.Conn) {
 	}
 	defer tempFile.Close()
 
-	// Lire l'image depuis la connexion et sauvegarder dans le fichier
-	_, err = tempFile.ReadFrom(conn)
-	if err != nil {
-		fmt.Println("Erreur lecture de l'image:", err)
-		return
+	// Lire les données en utilisant un buffer
+	buffer := make([]byte, 4096) // Taille du buffer
+	for {
+		n, err := conn.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break // Fin de la transmission
+			}
+			fmt.Println("Erreur lecture des données:", err)
+			return
+		}
+		_, writeErr := tempFile.Write(buffer[:n])
+		if writeErr != nil {
+			fmt.Println("Erreur écriture du fichier:", writeErr)
+			return
+		}
 	}
 
+	fmt.Println("✅ Fichier reçu, application du filtre...")
+
+	fmt.Println("Fichier reçu, application du filtre...")
+
 	// Appliquer le filtre
-	image_created := applyFilters()
+	image_created := applyFilters("gaussianFilter")
+
+	fmt.Println("Filtre appliqué, sauvegarde...")
 
 	// Sauvegarder l'image modifiée
 	outFile, err := os.Create("processed.png")
@@ -303,9 +347,18 @@ func handleClient(conn net.Conn) {
 		return
 	}
 
-	// Envoyer l'image modifiée au client
+	// Réinitialiser la position du fichier avant l'envoi
 	outFile.Seek(0, 0)
-	_, err = outFile.WriteTo(conn)
+
+	// Envoyer l'image modifiée au client
+	processedFile, err := os.Open("processed.png")
+	if err != nil {
+		fmt.Println("Erreur ouverture du fichier modifié:", err)
+		return
+	}
+	defer processedFile.Close()
+
+	_, err = io.Copy(conn, processedFile) // Envoi via io.Copy()
 	if err != nil {
 		fmt.Println("Erreur envoi de l'image:", err)
 	}
