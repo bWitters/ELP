@@ -6,6 +6,8 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	_ "image/jpeg"
+	_ "image/gif"
 	"io"
 	"math"
 	"net"
@@ -28,16 +30,15 @@ func image_opener() image.Image {
 	defer file.Close()
 	fmt.Println("image_opened")
 
-	// Decode the image
-	img, err := png.Decode(file)
+	// Decode the image (automatically detects format)
+	img, format, err := image.Decode(file)
 	if err != nil {
 		fmt.Println("Error decoding image:", err)
 		return nil
 	}
-	fmt.Println("Image format:", "png")
+	fmt.Println("Image format:", format)
 	return img
 }
-
 func grey_scale(pic image.Image) image.Image {
 	bounds := pic.Bounds()
 	newImg := image.NewRGBA(bounds)
@@ -329,7 +330,7 @@ func handleClient(conn net.Conn) {
 	fmt.Println("Fichier reçu, application du filtre...")
 
 	// Appliquer le filtre
-	image_created := applyFilters("gaussianFilter")
+	image_created := applyFilters("sobelY")
 
 	fmt.Println("Filtre appliqué, sauvegarde...")
 
@@ -368,7 +369,7 @@ func handleClient(conn net.Conn) {
 
 func main() {
 	// Lire le port en argument
-	port := "8080" // Valeur par défaut
+	port := "65432" // Valeur par défaut
 	if len(os.Args) > 1 {
 		port = os.Args[1]
 	}
